@@ -1,8 +1,12 @@
 // phi/mod.rs
 
+use self::gfx::Sprite;
 use ::sdl2::render::Renderer;
+use ::sdl2::pixels::Color;
 use ::sdl2::timer;
 use ::sdl2::rect::Rect as SdlRect;
+use ::std::collections::HashMap;
+use ::std::path::Path;
 
 #[macro_use]
 mod events;
@@ -29,6 +33,8 @@ struct_events! {
 pub struct Phi<'window> {
     pub events: Events,
     pub renderer: Renderer<'window>,
+
+    cached_fonts: HashMap<(&'static str, i32), ::sdl2_ttf::Font>,
 }
 
 impl<'window> Phi<'window> {
@@ -38,12 +44,33 @@ impl<'window> Phi<'window> {
         Phi {
             events: events,
             renderer: renderer,
+            cached_fonts: HashMap::new(),
         }
     }
 
     pub fn output_size(&self) -> (f64, f64) {
         let (w,h) = self.renderer.output_size().unwrap();
         (w as f64, h as f64)
+    }
+
+    pub fn ttf_str_sprite(&mut self, text: &str, font_path: &'static str, size:i32, color: Color) -> Option<Sprite> {
+        // First we determine whether the Font is cached - if so, use it
+        if let Some(font) = self.cached_fonts.get(&(font_path, size)) {
+            return font.render(text, ::sdl2_ttf::blended(color)).ok()
+                // If this worked be try to make this surface into a texture
+                .and_then(|surface| self.renderer.create_texture_from_surface(&surface).ok())
+                // If this worked we load
+                .map(Sprite::new)
+        }
+        // Otherwise try to load the requested font
+        ::sdl2_ttf::Font::from_file(Path::new(font_path), size).ok()
+            // We must wrap the next steps in a closure because Borrow Checker
+            .and_then(|font| {
+                // If this works we cached the font we loaded
+                self.cached_fonts.insert((font_path, size), font);
+                // Then we call this method recursively
+                self.ttf_str_sprite(text, font_path, size, color)
+            })
     }
 }
 
