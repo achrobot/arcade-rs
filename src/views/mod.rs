@@ -2,6 +2,7 @@
 
 pub mod game;
 pub mod main_menu;
+pub mod shared;
 
 /*
 use ::std::path::Path;

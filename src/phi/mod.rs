@@ -20,7 +20,8 @@ struct_events! {
         key_down: Down,
         key_left: Left,
         key_right: Right,
-        key_space: Space
+        key_space: Space,
+        key_return: Return
     },
 
     else: {

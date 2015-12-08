@@ -11,6 +11,9 @@ use ::sdl2::pixels::Color;
 use ::sdl2::render::{Texture, TextureQuery};
 use ::sdl2_image::LoadTexture;
 
+use ::views::shared::Background;
+use ::views::shared::Backgrounds;
+
 // CONSTANTS . . .
 
 const DEBUG: bool = false;
@@ -43,27 +46,22 @@ struct Ship {
     current: ShipFrame,
 }
 
-#[derive(Clone)]
-struct Background {
-    pos: f64,
-    // The number of pixels to move left every second
-    vel: f64,
-    sprite: Sprite,
-}
-
 // VIEW DEFINITIONS . . .
 
 pub struct ShipView {
-
     player: Ship,
-    bg_back: Background,
-    bg_middle: Background,
-    bg_front: Background,
+    backgrounds: Backgrounds,
 }
 
 impl ShipView {
 
+    #[allow(dead_code)]
     pub fn new(phi: &mut Phi) -> ShipView {
+        let bg = Backgrounds::new(&mut phi.renderer);
+        ShipView::new_with_backgrounds(phi, bg)
+    }
+
+    pub fn new_with_backgrounds(phi: &mut Phi, backgrounds: Backgrounds) -> ShipView {
 
         // Load the texture from the filesystem
         let spritesheet = Sprite::load(&mut phi.renderer, "assets/spaceship.png").unwrap();
@@ -79,8 +77,6 @@ impl ShipView {
             }
         }
 
-        //let (w, h) = sprite.size();
-
         ShipView {
             player: Ship {
                 rect: Rectangle {
@@ -92,21 +88,8 @@ impl ShipView {
                 sprites: sprites,
                 current: ShipFrame::MidNorm,
             },
-            bg_back: Background {
-                pos: 0.0,
-                vel: 20.0,
-                sprite: Sprite::load(&mut phi.renderer, "assets/starBG.png").unwrap(),
-            },
-            bg_middle: Background {
-                pos: 0.0,
-                vel: 40.0,
-                sprite: Sprite::load(&mut phi.renderer, "assets/starMG.png").unwrap(),
-            },
-            bg_front: Background {
-                pos: 0.0,
-                vel: 80.0,
-                sprite: Sprite::load(&mut phi.renderer, "assets/starFG.png").unwrap(),
-            },
+
+            backgrounds: backgrounds,
         }
     }
 }
@@ -115,29 +98,31 @@ impl View for ShipView {
 
     fn render(&mut self, phi: &mut Phi, elapsed: f64) -> ViewAction {
 
-        let events = &phi.events;
-
-        if events.now.quit || events.now.key_escape == Some(true) {
-
+        if phi.events.now.quit {
             return ViewAction::Quit;
+        }
+        if phi.events.now.key_escape == Some(true) {
+            return ViewAction::ChangeView(Box::new(
+                ::views::main_menu::MainMenuView::new_with_backgrounds(
+                    phi, self.backgrounds.clone())));
         }
 
         // Move the player's ship
 
-        let diagonal =  (events.key_up ^ events.key_down)
-                     && (events.key_left ^ events.key_right);
+        let diagonal =  (phi.events.key_up ^ phi.events.key_down)
+                     && (phi.events.key_left ^ phi.events.key_right);
 
         let moved = if diagonal { 1.0 / 2.0f64.sqrt() }
                     else { 1.0 }
                     * PLAYER_SPEED * elapsed;
 
-        let dx = match (events.key_left, events.key_right) {
+        let dx = match (phi.events.key_left, phi.events.key_right) {
             (true, true) | (false, false) => 0.0,
             (true, false) => -moved,
             (false, true) =>  moved,
         };
 
-        let dy = match (events.key_up, events.key_down) {
+        let dy = match (phi.events.key_up, phi.events.key_down) {
             (true, true) | (false, false) => 0.0,
             (true, false) => -moved,
             (false, true) =>  moved,
@@ -175,8 +160,8 @@ impl View for ShipView {
         phi.renderer.clear();
 
         // Render the backgrounds . . .
-        self.bg_back.render(&mut phi.renderer, elapsed);
-        self.bg_middle.render(&mut phi.renderer, elapsed);
+        self.backgrounds.back.render(&mut phi.renderer, elapsed);
+        self.backgrounds.middle.render(&mut phi.renderer, elapsed);
 
         // Render the bounding box (for debugging) . . .\
         if (DEBUG)
@@ -190,42 +175,9 @@ impl View for ShipView {
             .render(&mut phi.renderer, self.player.rect);
 
         // Render the foreground . . .
-        self.bg_front.render(&mut phi.renderer, elapsed);
+        self.backgrounds.front.render(&mut phi.renderer, elapsed);
 
         ViewAction::None
     }
 
-}
-
-impl Background {
-    fn render(&mut self, renderer: &mut Renderer, elapsed: f64) {
-        // We define a logical position as depending solely on the time
-        // and on the dimensions of the image, not on the screen size.
-        let size = self.sprite.size();
-        self.pos += self.vel * elapsed;
-        if self.pos > size.0 {
-            self.pos -= size.0;
-        }
-
-        // We determine the scale ration of the window to the sprite.
-        let (win_w, win_h) = renderer.output_size().unwrap();
-        let scale = win_h as f64 / size.1;
-
-        // We render as many copies of the background as necessary
-        // to fill the screen.
-        let mut physical_left = -self.pos * scale;
-
-        while physical_left < win_w as f64 {
-            // While the left of the image is still inside the window
-            self.sprite.render(renderer, Rectangle {
-            //renderer.copy_sprite(&self.sprite, Rectangle {
-                x: physical_left,
-                y: 0.0,
-                w: size.0 * scale,
-                h: win_h as f64,
-            });
-
-            physical_left += size.0 * scale;
-        }
-    }
 }
