@@ -2,7 +2,7 @@
 
 use ::sdl2::render::Renderer;
 use ::phi::data::Rectangle;
-use ::phi::gfx::Sprite;
+use ::phi::gfx::{Renderable, Sprite};
 
 #[derive(Clone)]
 pub struct Background {

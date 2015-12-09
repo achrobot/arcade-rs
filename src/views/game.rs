@@ -1,17 +1,13 @@
 // views/game.rs
 
-use ::std::path::Path;
+use ::rand;
+
+use ::sdl2::pixels::Color;
 
 use ::phi::{Phi, View, ViewAction};
 use ::phi::data::Rectangle;
-use ::phi::gfx::Sprite;
-use ::sdl2::render::Renderer;
-use ::sdl2::pixels::Color;
-//use ::sdl2::rect::Rect as SdlRect;
-use ::sdl2::render::{Texture, TextureQuery};
-use ::sdl2_image::LoadTexture;
+use ::phi::gfx::{Renderable, Sprite, AnimatedSprite};
 
-use ::views::shared::Background;
 use ::views::shared::Backgrounds;
 
 // CONSTANTS . . .
@@ -50,6 +46,7 @@ struct Ship {
 
 pub struct ShipView {
     player: Ship,
+    asteroid: Asteroid,
     backgrounds: Backgrounds,
 }
 
@@ -88,6 +85,8 @@ impl ShipView {
                 sprites: sprites,
                 current: ShipFrame::MidNorm,
             },
+
+            asteroid: Asteroid::new(phi),
 
             backgrounds: backgrounds,
         }
@@ -154,6 +153,9 @@ impl View for ShipView {
             else if dx < 0.0  && dy > 0.0  { ShipFrame::DownSlow }
             else { unreachable!() };
 
+        // Update the asteroid
+        self.asteroid.update(phi, elapsed);
+
         // Clear the screen . . .
 
         phi.renderer.set_draw_color(Color::RGB(0, 0, 0));
@@ -164,7 +166,7 @@ impl View for ShipView {
         self.backgrounds.middle.render(&mut phi.renderer, elapsed);
 
         // Render the bounding box (for debugging) . . .\
-        if (DEBUG)
+        if DEBUG
         {
             phi.renderer.set_draw_color(Color::RGB(200, 200, 50));
             phi.renderer.fill_rect(self.player.rect.to_sdl().unwrap());
@@ -174,10 +176,99 @@ impl View for ShipView {
         self.player.sprites[self.player.current as usize]
             .render(&mut phi.renderer, self.player.rect);
 
+        // Render the asteroid
+        self.asteroid.render(phi);
+
         // Render the foreground . . .
         self.backgrounds.front.render(&mut phi.renderer, elapsed);
 
         ViewAction::None
     }
 
+}
+
+const ASTEROID_PATH: &'static str = "assets/asteroid.png";
+const ASTEROIDS_WIDE: usize = 21;
+const ASTEROIDS_HIGH: usize = 7;
+const ASTEROIDS_TOTAL: usize = ASTEROIDS_WIDE * ASTEROIDS_HIGH - 4;
+const ASTEROID_SIDE: f64 = 96.0;
+
+pub struct Asteroid {
+    sprite: AnimatedSprite,
+    rect: Rectangle,
+    vel: f64,
+}
+
+impl Asteroid {
+
+    pub fn new(phi: &mut Phi) -> Asteroid {
+        let (w, h) = phi.output_size();
+
+        let mut asteroid =
+            Asteroid {
+                sprite: Asteroid::get_sprite(phi, 1.0),
+                rect: Rectangle {
+                    w: ASTEROID_SIDE,
+                    h: ASTEROID_SIDE,
+                    x: 0.0,
+                    y: 0.0,
+                },
+                vel: 0.0,
+            };
+        asteroid.reset(phi);
+        asteroid
+    }
+
+    pub fn get_sprite(phi: &mut Phi, fps: f64) -> AnimatedSprite {
+        let asteroid_spritesheet = Sprite::load(&mut phi.renderer, ASTEROID_PATH).unwrap();
+        let mut asteroid_sprites = Vec::with_capacity(ASTEROIDS_TOTAL);
+
+        for yth in 0..ASTEROIDS_HIGH {
+            for xth in 0..ASTEROIDS_WIDE {
+                // Omit the 4 missing asteroid sprites at the end
+                if ASTEROIDS_WIDE * yth + xth >= ASTEROIDS_TOTAL {
+                    break;
+                }
+
+                asteroid_sprites.push(
+                    asteroid_spritesheet.region(Rectangle {
+                        w: ASTEROID_SIDE,
+                        h: ASTEROID_SIDE,
+                        x: ASTEROID_SIDE * xth as f64,
+                        y: ASTEROID_SIDE * yth as f64,
+                    }).unwrap());
+            }
+        }
+        AnimatedSprite::new_with_fps(asteroid_sprites, fps)
+    }
+
+    fn reset(&mut self, phi: &mut Phi) {
+        let (w, h) = phi.output_size();
+
+        // Get FPS in [10.0, 30.0)
+        self.sprite.set_fps(::rand::random::<f64>().abs() * 20.0 + 10.0);
+
+        self.rect = Rectangle {
+            w: ASTEROID_SIDE,
+            h: ASTEROID_SIDE,
+            x: w,
+            y: ::rand::random::<f64>().abs() * (h - ASTEROID_SIDE),
+        };
+
+        // Velocity in [50.0, 150)
+        self.vel = rand::random::<f64>().abs() * 100.0 + 50.0;
+    }
+
+    pub fn update(&mut self, phi: &mut Phi, dt: f64) {
+        self.rect.x -= dt * self.vel;
+        self.sprite.add_time(dt);
+
+        if self.rect.x < -ASTEROID_SIDE {
+            self.reset(phi);
+        }
+    }
+
+    pub fn render(&mut self, phi: &mut Phi) {
+        self.sprite.render(&mut phi.renderer, self.rect);
+    }
 }

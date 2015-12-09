@@ -1,11 +1,10 @@
 // views/main_menu.rs
 
 use ::phi::data::Rectangle;
-use ::phi::gfx::Sprite;
+use ::phi::gfx::{Renderable, Sprite};
 use ::phi::{Phi, View, ViewAction};
 use ::sdl2::pixels::Color;
 
-use views::shared::Background;
 use views::shared::Backgrounds;
 
 struct Action {
