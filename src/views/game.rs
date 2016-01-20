@@ -35,6 +35,50 @@ enum ShipFrame {
     DownSlow = 8,
 }
 
+const BULLET_SPEED: f64 = 240.0;  // pixels/second
+const BULLET_W: f64 = 8.0;
+const BULLET_H: f64 = 4.0;
+
+trait Bullet {
+    fn update(self: Box<Self>, phi: &mut Phi, dt: f64) -> Option<Box<Bullet>>;
+    fn render(&self, phi: &mut Phi);
+    fn rect(&self) -> Rectangle;
+}
+
+#[derive(Clone, Copy)]
+struct RectBullet {
+    rect: Rectangle,
+}
+
+impl Bullet for RectBullet {
+
+    /// Update the bullet; delete it if it leaves the screen.
+    /// Return Some(updated_bullet) or None
+    fn update(mut self: Box<Self>, phi: &mut Phi, dt: f64) -> Option<Box<Bullet>> {
+        let (w, _) = phi.output_size();
+        self.rect.x += BULLET_SPEED * dt;
+
+        // If the bullet has left the screen, delete it
+        if self.rect.x > w {
+            None
+        }
+        else {
+            Some(self)
+        }
+    }
+
+    /// Render the bullet to the screen
+    fn render(&self, phi: &mut Phi) {
+        phi.renderer.set_draw_color(Color::RGB(230, 230, 30));  // yellow
+        phi.renderer.fill_rect(self.rect.to_sdl().unwrap());
+    }
+
+    /// Return the bullet's bounding box
+    fn rect(&self) -> Rectangle {
+        self.rect
+    }
+}
+
 struct Ship {
 
     rect: Rectangle,
@@ -42,10 +86,40 @@ struct Ship {
     current: ShipFrame,
 }
 
+impl Ship {
+    fn spawn_bullets(&self) -> Vec<Box<Bullet>> {
+        let cannons_x = self.rect.x + 30.0;
+        let cannon1_y = self.rect.y + 6.0;
+        let cannon2_y = self.rect.y + SHIP_H - 10.0;
+
+        // Create one bullet at the tip of each cannon
+        vec![
+            Box::new(RectBullet {
+                rect: Rectangle {
+                    x : cannons_x,
+                    y : cannon1_y,
+                    w : BULLET_W,
+                    h : BULLET_H,
+                }
+            }),
+            Box::new(RectBullet {
+                rect: Rectangle {
+                    x : cannons_x,
+                    y : cannon2_y,
+                    w : BULLET_W,
+                    h : BULLET_H,
+                }
+            }),
+        ]
+    }
+}
+
+
 // VIEW DEFINITIONS . . .
 
 pub struct ShipView {
     player: Ship,
+    bullets: Vec<Box<Bullet>>,
     asteroid: Asteroid,
     backgrounds: Backgrounds,
 }
@@ -85,6 +159,8 @@ impl ShipView {
                 sprites: sprites,
                 current: ShipFrame::MidNorm,
             },
+
+            bullets: vec![],
 
             asteroid: Asteroid::new(phi),
 
@@ -153,8 +229,19 @@ impl View for ShipView {
             else if dx < 0.0  && dy > 0.0  { ShipFrame::DownSlow }
             else { unreachable!() };
 
+        // Update the bullets
+        let old_bullets = ::std::mem::replace(&mut self.bullets, vec![]);
+        self.bullets = old_bullets.into_iter()
+            .filter_map(|bullet| bullet.update(phi, elapsed)).collect();
+
         // Update the asteroid
         self.asteroid.update(phi, elapsed);
+
+        // Allow the player to shoot after the bullets are updated
+        // so that the new bullets appear at the tips of the cannons.
+        if phi.events.now.key_space == Some(true) {
+            self.bullets.append(&mut self.player.spawn_bullets());
+        }
 
         // Clear the screen . . .
 
@@ -175,6 +262,11 @@ impl View for ShipView {
         // Render the ship . . .
         self.player.sprites[self.player.current as usize]
             .render(&mut phi.renderer, self.player.rect);
+
+        // Render the bullets
+        for bullet in &self.bullets {
+            bullet.render(phi);
+        }
 
         // Render the asteroid
         self.asteroid.render(phi);
