@@ -39,6 +39,13 @@ const BULLET_SPEED: f64 = 240.0;  // pixels/second
 const BULLET_W: f64 = 8.0;
 const BULLET_H: f64 = 4.0;
 
+#[derive(Clone, Copy)]
+enum CannonType {
+    RectBullet,
+    SineBullet { amplitude: f64, angular_vel: f64 },
+    DivergentBullet { a: f64, b: f64 },
+}
+
 trait Bullet {
     fn update(self: Box<Self>, phi: &mut Phi, dt: f64) -> Option<Box<Bullet>>;
     fn render(&self, phi: &mut Phi);
@@ -48,6 +55,25 @@ trait Bullet {
 #[derive(Clone, Copy)]
 struct RectBullet {
     rect: Rectangle,
+}
+
+struct SineBullet {
+    //? Notice that the bounding box isn't stored, it is computed
+    pos_x: f64,
+    origin_y: f64,
+    amplitude: f64,
+    angular_vel: f64,
+    total_time: f64,
+}
+
+/// Bullet which follows a vertical trajectory described by:
+///     a * ( (t / b)^3 - (t / b)^2)
+struct DivergentBullet {
+    pos_x: f64,
+    origin_y: f64,
+    a: f64,  // Influences bullet height
+    b: f64,  // Influences bullet width
+    total_time: f64,
 }
 
 impl Bullet for RectBullet {
@@ -79,11 +105,90 @@ impl Bullet for RectBullet {
     }
 }
 
+impl Bullet for SineBullet {
+
+    /// Update the bullet; delete it if it leaves the screen.
+    /// Return Some(updated_bullet) or None
+    fn update(mut self: Box<Self>, phi: &mut Phi, dt: f64) -> Option<Box<Bullet>> {
+        self.total_time += dt;
+        self.pos_x += BULLET_SPEED * dt;
+
+        let (w, _) = phi.output_size();
+
+        // If the bullet has left the screen, delete it
+        if self.rect().x > w {
+            None
+        }
+        else {
+            Some(self)
+        }
+    }
+
+    /// Render the bullet to the screen
+    fn render(&self, phi: &mut Phi) {
+        phi.renderer.set_draw_color(Color::RGB(30, 230, 30));  // greenish
+        phi.renderer.fill_rect(self.rect().to_sdl().unwrap());
+    }
+
+    /// Return the bullet's bounding box
+    fn rect(&self) -> Rectangle {
+        let dy = self.amplitude * f64::sin(self.angular_vel * self.total_time);
+        Rectangle {
+            x: self.pos_x,
+            y: self.origin_y + dy,
+            w: BULLET_W,
+            h: BULLET_H,
+        }
+    }
+}
+
+impl Bullet for DivergentBullet {
+
+    /// Update the bullet; delete it if it leaves the screen.
+    /// Return Some(updated_bullet) or None
+    fn update(mut self: Box<Self>, phi: &mut Phi, dt: f64) -> Option<Box<Bullet>> {
+        self.total_time += dt;
+        self.pos_x += BULLET_SPEED * dt;
+
+        let (w, h) = phi.output_size();
+
+        // If the bullet has left the screen, delete it
+        let rect = self.rect();
+        if rect.x > w || rect.x < 0.0 ||
+           rect.y > h || rect.y < 0.0 {
+            None
+        }
+        else {
+            Some(self)
+        }
+    }
+
+    /// Render the bullet to the screen
+    fn render(&self, phi: &mut Phi) {
+        phi.renderer.set_draw_color(Color::RGB(230, 30, 30));  // reddish
+        phi.renderer.fill_rect(self.rect().to_sdl().unwrap());
+    }
+
+    /// Return the bullet's bounding box
+    fn rect(&self) -> Rectangle {
+        let dy = self.a *
+                ((self.total_time / self.b).powi(3) -
+                 (self.total_time / self.b).powi(2));
+        Rectangle {
+            x: self.pos_x,
+            y: self.origin_y + dy,
+            w: BULLET_W,
+            h: BULLET_H,
+        }
+    }
+}
+
 struct Ship {
 
     rect: Rectangle,
     sprites: Vec<Sprite>,
     current: ShipFrame,
+    cannon: CannonType,
 }
 
 impl Ship {
@@ -93,24 +198,61 @@ impl Ship {
         let cannon2_y = self.rect.y + SHIP_H - 10.0;
 
         // Create one bullet at the tip of each cannon
-        vec![
-            Box::new(RectBullet {
-                rect: Rectangle {
-                    x : cannons_x,
-                    y : cannon1_y,
-                    w : BULLET_W,
-                    h : BULLET_H,
-                }
-            }),
-            Box::new(RectBullet {
-                rect: Rectangle {
-                    x : cannons_x,
-                    y : cannon2_y,
-                    w : BULLET_W,
-                    h : BULLET_H,
-                }
-            }),
-        ]
+        match self.cannon {
+            CannonType::RectBullet =>
+                vec![
+                    Box::new(RectBullet {
+                        rect: Rectangle {
+                            x : cannons_x,
+                            y : cannon1_y,
+                            w : BULLET_W,
+                            h : BULLET_H,
+                        }
+                    }),
+                    Box::new(RectBullet {
+                        rect: Rectangle {
+                            x : cannons_x,
+                            y : cannon2_y,
+                            w : BULLET_W,
+                            h : BULLET_H,
+                        }
+                    }),
+                ],
+            CannonType::SineBullet { amplitude, angular_vel } =>
+                vec![
+                    Box::new(SineBullet {
+                        pos_x: cannons_x,
+                        origin_y: cannon1_y,
+                        amplitude: amplitude,
+                        angular_vel: angular_vel,
+                        total_time: 0.0,
+                    }),
+                    Box::new(SineBullet {
+                        pos_x: cannons_x,
+                        origin_y: cannon2_y,
+                        amplitude: amplitude,
+                        angular_vel: angular_vel,
+                        total_time: 0.0,
+                    }),
+                ],
+            CannonType::DivergentBullet { a, b } =>
+                vec![
+                    Box::new(DivergentBullet {
+                        pos_x: cannons_x,
+                        origin_y: cannon1_y,
+                        a: -a,
+                        b: b,
+                        total_time: 0.0,
+                    }),
+                    Box::new(DivergentBullet {
+                        pos_x: cannons_x,
+                        origin_y: cannon2_y,
+                        a: a,
+                        b: b,
+                        total_time: 0.0,
+                    }),
+                ]
+        }
     }
 }
 
@@ -158,6 +300,7 @@ impl ShipView {
                 },
                 sprites: sprites,
                 current: ShipFrame::MidNorm,
+                cannon: CannonType::RectBullet,
             },
 
             bullets: vec![],
@@ -180,6 +323,24 @@ impl View for ShipView {
             return ViewAction::ChangeView(Box::new(
                 ::views::main_menu::MainMenuView::new_with_backgrounds(
                     phi, self.backgrounds.clone())));
+        }
+
+        // Change the player's cannons
+        if phi.events.now.key_1 == Some(true) {
+            self.player.cannon = CannonType::RectBullet;
+        }
+        if phi.events.now.key_2 == Some(true) {
+            self.player.cannon = CannonType::SineBullet {
+                amplitude: 10.0,
+                angular_vel: 15.0,
+            };
+        }
+
+        if phi.events.now.key_3 == Some(true) {
+            self.player.cannon = CannonType::DivergentBullet {
+                a: 100.0,
+                b: 1.2,
+            };
         }
 
         // Move the player's ship

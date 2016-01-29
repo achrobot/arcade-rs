@@ -21,7 +21,11 @@ struct_events! {
         key_left: Left,
         key_right: Right,
         key_space: Space,
-        key_return: Return
+        key_return: Return,
+
+        key_1: Num1,
+        key_2: Num2,
+        key_3: Num3
     },
 
     else: {
@@ -40,7 +44,7 @@ pub struct Phi<'window> {
 
 impl<'window> Phi<'window> {
     fn new(events: Events, renderer: Renderer<'window>) -> Phi<'window> {
-        ::sdl2_image::init(::sdl2_image::INIT_PNG);
+        //::sdl2_image::init(::sdl2_image::INIT_PNG);
 
         Phi {
             events: events,
@@ -75,11 +79,11 @@ impl<'window> Phi<'window> {
     }
 }
 
-impl<'window> Drop for Phi<'window> {
-    fn drop(&mut self) {
-        ::sdl2_image::quit();
-    }
-}
+//impl<'window> Drop for Phi<'window> {
+//    fn drop(&mut self) {
+//        ::sdl2_image::quit();
+//    }
+//}
 
 /// A ViewAction is a way for the currently executed view to communicate
 /// with the game loop. It specifies which action should be executed
@@ -114,9 +118,10 @@ pub fn spawn<F>(title: &str, init: F)
 
     // Initialize SDL2
     let     sdl_context = ::sdl2::init().unwrap();
+    let     _image_context = ::sdl2_image::init(::sdl2_image::INIT_PNG).unwrap();
+    let     _ttf_context = ::sdl2_ttf::init().unwrap();
     let mut sdl_timer = sdl_context.timer().unwrap();
     let     sdl_video = sdl_context.video().unwrap();
-    let     _ttf_context = ::sdl2_ttf::init().unwrap();
 
     // Create the window
     let window = sdl_video.window("ArcadeRS Shooter", 800, 600)
