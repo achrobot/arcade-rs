@@ -45,7 +45,7 @@ impl MainMenuView {
             actions: vec![
                 Action::new(phi, "New Game", Box::new(|phi, backgrounds| {
                     ViewAction::ChangeView(Box::new(
-                        ::views::game::ShipView::new_with_backgrounds(phi, backgrounds)))
+                        ::views::game::GameView::new_with_backgrounds(phi, backgrounds)))
                 })),
                 Action::new(phi, "Quit", Box::new(|_, _| {
                     ViewAction::Quit

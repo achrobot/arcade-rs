@@ -259,22 +259,22 @@ impl Ship {
 
 // VIEW DEFINITIONS . . .
 
-pub struct ShipView {
+pub struct GameView {
     player: Ship,
     bullets: Vec<Box<Bullet>>,
     asteroid: Asteroid,
     backgrounds: Backgrounds,
 }
 
-impl ShipView {
+impl GameView {
 
     #[allow(dead_code)]
-    pub fn new(phi: &mut Phi) -> ShipView {
+    pub fn new(phi: &mut Phi) -> GameView {
         let bg = Backgrounds::new(&mut phi.renderer);
-        ShipView::new_with_backgrounds(phi, bg)
+        GameView::new_with_backgrounds(phi, bg)
     }
 
-    pub fn new_with_backgrounds(phi: &mut Phi, backgrounds: Backgrounds) -> ShipView {
+    pub fn new_with_backgrounds(phi: &mut Phi, backgrounds: Backgrounds) -> GameView {
 
         // Load the texture from the filesystem
         let spritesheet = Sprite::load(&mut phi.renderer, "assets/spaceship.png").unwrap();
@@ -290,7 +290,7 @@ impl ShipView {
             }
         }
 
-        ShipView {
+        GameView {
             player: Ship {
                 rect: Rectangle {
                     x: 64.0,
@@ -312,7 +312,7 @@ impl ShipView {
     }
 }
 
-impl View for ShipView {
+impl View for GameView {
 
     fn render(&mut self, phi: &mut Phi, elapsed: f64) -> ViewAction {
 
